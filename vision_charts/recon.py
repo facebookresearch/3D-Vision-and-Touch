@@ -38,20 +38,23 @@ class Engine():
 		self.args = args
 		self.last_improvement = 0
 		self.num_samples = 10000
-		self.classes = ['bottle', 'knife', 'cellphone', 'rifle']
+		self.classes = ['0001', '0002']
 		self.checkpoint_dir = os.path.join('experiments/checkpoint/', args.exp_type, args.exp_id)
 
 
 
 	def __call__(self) -> float:
 		# initial data
-		self.adj_info, initial_positions = utils.load_mesh_vision(self.args, f'../data/vision_sheets.obj')
+		if  self.args.GEOmetrics:
+			self.adj_info, initial_positions = utils.load_mesh_vision(self.args, f'../data/sphere.obj')
+		else:
+			self.adj_info, initial_positions = utils.load_mesh_vision(self.args, f'../data/vision_sheets.obj')
 		self.encoder = models.Encoder(self.adj_info, Variable(initial_positions.cuda()), self.args)
 		self.encoder.cuda()
 		params = list(self.encoder.parameters())
 		self.optimizer = optim.Adam(params, lr=self.args.lr, weight_decay=0)
 
-		writer = SummaryWriter(os.path.join('experiments/tensorboard/', args.exp_type ))
+		writer = SummaryWriter(os.path.join('experiments/tensorboard/', self.args.exp_type ))
 		train_loader, valid_loaders = self.get_loaders()
 
 		if self.args.eval:
@@ -96,6 +99,7 @@ class Engine():
 			gt_points = batch['gt_points'].cuda()
 
 			# inference
+			# self.encoder.img_encoder.pooling(img_unocc, gt_points, debug=True)
 			verts = self.encoder(img_occ, img_unocc, batch)
 
 			# losses
@@ -120,10 +124,9 @@ class Engine():
 	def validate(self, data, writer):
 		total_loss = 0
 		# local losses at different distances from the touch sites
-		total_local_loss = [0 for i in range(5)]
-		total_local_loss_success = 0
 
 		self.encoder.eval()
+		all_losses = []
 		for v, valid_loader in enumerate(data):
 			num_examples = 0
 			class_loss = 0
@@ -140,19 +143,15 @@ class Engine():
 
 				# losses
 				loss = utils.chamfer_distance(verts, self.adj_info['faces'], gt_points, num=self.num_samples)
+				all_losses += [l.item() for l in loss*self.args.loss_coeff]
+
 				loss = self.args.loss_coeff * loss.mean() * batch_size
 
 				# logs
 				num_examples += float(batch_size)
 				class_loss += loss
 
-				if self.args.eval:
-					more_samples = utils.batch_sample(verts, self.adj_info['faces'], num=30000)
-					total_local_loss, num_success_local_loss = utils.calc_local_chamfer(more_samples, batch, total_local_loss )
-					total_local_loss_success += num_success_local_loss
-
 			print_loss = (class_loss / num_examples)
-
 			message = f'Valid || Epoch: {self.epoch}, class: {obj_class}, f1: {print_loss:.2f}'
 			tqdm.write(message)
 			total_loss += (print_loss / float(len(self.classes)))
@@ -160,19 +159,6 @@ class Engine():
 		print('*******************************************************')
 		print(f'Validation Accuracy: {total_loss}')
 		print('*******************************************************')
-
-		if self.args.eval:
-			total_local_loss = [t/ total_local_loss_success for t in total_local_loss]
-			print('*******************************************************')
-			print(f'Validation local loss across different sizes:')
-			print(f'	sensor size x 1 : {total_local_loss[0].item()}')
-			print(f'	sensor size x 2 : {total_local_loss[1].item()}')
-			print(f'	sensor size x 3 : {total_local_loss[2].item()}')
-			print(f'	sensor size x 4 : {total_local_loss[3].item()}')
-			print(f'	sensor size x 5 : {total_local_loss[4].item()}')
-			print('*******************************************************')
-			exit()
-
 
 		writer.add_scalars('valid_ptp', {self.args.exp_id: total_loss}, self.epoch)
 		self.current_loss = total_loss
@@ -207,7 +193,7 @@ class Engine():
 		self.optimizer.load_state_dict(torch.load(self.checkpoint_dir + '/optim_vision' + label))
 
 	def load_pretrained(self):
-		pretrained_location = '../pretrained/vision_charts/' + self.args.pretrained
+		pretrained_location = 'experiments/checkpoint/pretrained/' + self.args.pretrained
 		self.encoder.load_state_dict(torch.load(pretrained_location))
 
 
@@ -216,8 +202,8 @@ if __name__ == '__main__':
 	import argparse
 
 	parser = argparse.ArgumentParser()
-
 	parser.add_argument('--seed', type=int, default=0, help='Setting for the random seed.')
+	parser.add_argument('--GEOmetrics', type=int, default=0, help='use GEOMemtrics setup instead')
 	parser.add_argument('--lr', type=float, default=0.0003, help='Initial learning rate.')
 	parser.add_argument('--eval', action='store_true', default=False, help='Evaluate the trained model on the test set.')
 	parser.add_argument('--batch_size', type=int, default=16, help='Size of the batch.')
@@ -226,7 +212,7 @@ if __name__ == '__main__':
 	parser.add_argument('--use_occluded', action='store_true', default=False, help='To use the occluded image.')
 	parser.add_argument('--use_unoccluded', action='store_true', default=False, help='To use the unoccluded image.')
 	parser.add_argument('--use_touch', action='store_true', default=False, help='To use the touch information.')
-	parser.add_argument('--patience', type=int, default=70, help='How many epochs without imporvement before training stops.')
+	parser.add_argument('--patience', type=int, default=30, help='How many epochs without imporvement before training stops.')
 	parser.add_argument('--loss_coeff', type=float, default=9000., help='Coefficient for loss term.')
 	parser.add_argument('--num_img_blocks', type=int, default=6, help='Number of image block in the image encoder.')
 	parser.add_argument('--num_img_layers', type=int, default=3, help='Number of image layer in each blocl in the image encoder.')
@@ -235,7 +221,7 @@ if __name__ == '__main__':
 	parser.add_argument('--hidden_gcn_layers', type=int, default=300, help='Size of the feature vector for each  GCN layer in the mesh deformation network.')
 	parser.add_argument('--num_grasps', type=int, default=1, help='Number of grasps in each instance to train with')
 	parser.add_argument('--pretrained', type=str, default='no', help='String indicating which pretrained model to use.',
-						choices=['no', 'touch', 'touch_unoccluded', 'touch_occluded', 'unoccluded', 'occluded'])
+						choices=['no', 'empty', 'touch', 'touch_unoccluded', 'touch_occluded', 'unoccluded', 'occluded'])
 	args = parser.parse_args()
 
 	# update args for pretrained models

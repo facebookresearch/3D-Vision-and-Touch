@@ -32,11 +32,10 @@ class mesh_loader_vision(object):
 
 		# initialization of data locations
 		self.args = args
-		self.surf_location = '../data/surface/'
+		self.surf_location = '../data/surfaces/'
 		self.img_location = '../data/images/'
-		self.touch_location = '../data/touch_info/'
+		self.touch_location = '../data/scene_info/'
 		self.sheet_location = '../data/sheets/'
-		self.point_rings_location = '../data/point_rings/'
 		self.sample_num = sample_num
 		self.set_type = set_type
 		self.set_list = np.load('../data/split.npy', allow_pickle='TRUE').item()
@@ -44,15 +43,15 @@ class mesh_loader_vision(object):
 		names = [[f.split('/')[-1], f.split('/')[-2]] for f in glob((f'{self.img_location}/*/*'))]
 		self.names = []
 		self.classes_names = [[] for _ in classes]
+		np.random.shuffle(names)
 		for n in tqdm(names):
 			if n[1] in classes:
-				if os.path.exists(self.surf_location + n[1] + '/' + n[0] + '.mat'):
+				if os.path.exists(self.surf_location + n[1] + '/' + n[0] + '.npy'):
 					if os.path.exists(self.touch_location + n[1] + '/' + n[0]):
-						source = self.point_rings_location + n[1] + '/' + n[0]
-						if n[0] in self.set_list[n[1]][self.set_type]:
-							for i in range(5):
-								self.names.append(n + [i])
-								self.classes_names[classes.index(n[1])].append(n + [i])
+						if n[0] + n[1] in self.set_list[self.set_type]:
+							if n[0] +n[1] in self.set_list[self.set_type]:
+								self.names.append(n)
+								self.classes_names[classes.index(n[1])].append(n)
 
 		print(f'The number of {set_type} set objects found : {len(self.names)}')
 
@@ -64,32 +63,29 @@ class mesh_loader_vision(object):
 		# select an object and and a principle grasp randomly
 		class_choice = random.choice(self.classes_names)
 		object_choice = random.choice(class_choice)
-		obj, obj_class, num = object_choice
-		orig_num = num
-
+		obj, obj_class = object_choice
 		# select the remaining grasps and shuffle the select grasps
 		num_choices = [0, 1, 2, 3, 4]
-		del (num_choices[num])
-		nums = [num]
-		for i in range(self.args.num_grasps - 1):
+		nums = []
+		for i in range(self.args.num_grasps):
 			choice = random.choice(num_choices)
 			nums.append(choice)
 			del (num_choices[num_choices.index(choice)])
 		random.shuffle(nums)
-		return obj, obj_class, orig_num, nums
+		return obj, obj_class, nums[-1], nums
 
 	# select the object and grasps for validating
 	def get_validation_examples(self, index):
 		# select an object and a principle grasp
-		obj, obj_class, num = self.names[index]
-		orig_num = num
+		obj, obj_class = self.names[index]
+		orig_num = 0
 		# select the remaining grasps deterministically
-		nums = [(num + i) % 5 for i in range(self.args.num_grasps)]
+		nums = [(orig_num + i) % 5 for i in range(self.args.num_grasps)]
 		return obj, obj_class, orig_num, nums
 
 	# load surface point cloud
 	def get_gt_points(self, obj_class, obj):
-		samples = sio.loadmat(self.surf_location + obj_class + '/' + obj + '.mat')['points']
+		samples = np.load(self.surf_location +obj_class + '/' + obj + '.npy')
 		if self.args.eval:
 			np.random.seed(0)
 		np.random.shuffle(samples)
@@ -102,7 +98,7 @@ class mesh_loader_vision(object):
 	def get_images(self, obj_class, obj, grasp_number):
 		# load images
 		img_occ = Image.open(f'{self.img_location}/{obj_class}/{obj}/{grasp_number}.png')
-		img_unocc = Image.open(f'{self.img_location}/{obj_class}/{obj}/object.png')
+		img_unocc = Image.open(f'{self.img_location}/{obj_class}/{obj}/unoccluded.png')
 		# apply pytorch image preprocessing
 		img_occ = preprocess(img_occ)
 		img_unocc = preprocess(img_unocc)
@@ -114,7 +110,7 @@ class mesh_loader_vision(object):
 		# cycle though grasps and load touch sheets
 		for grasp in grasps:
 			sheet_location = self.sheet_location + f'{obj_class}/{obj}/sheets_{grasp}_finger_num.npy'
-			hand_info = np.load(f'{self.touch_location}/{obj_class}/{obj}/hand_{grasp}.npy', allow_pickle=True).item()
+			hand_info = np.load(f'{self.touch_location}/{obj_class}/{obj}/{grasp}.npy', allow_pickle=True).item()
 			sheet, success = self.get_touch_sheets(sheet_location, hand_info)
 			sheets.append(sheet)
 			successful += success
@@ -124,8 +120,8 @@ class mesh_loader_vision(object):
 	def get_touch_sheets(self, location, hand_info):
 		sheets = []
 		successful = []
-		touches = hand_info['touch']
-		finger_pos = torch.FloatTensor(hand_info['tip_pos'])
+		touches = hand_info['touch_success']
+		finger_pos = torch.FloatTensor(hand_info['cam_pos'])
 		# cycle through fingers in the grasp
 		for i in range(4):
 			sheet = np.load(location.replace('finger_num', str(i)))
@@ -139,25 +135,6 @@ class mesh_loader_vision(object):
 				successful.append(True) # binary mask for successful touch
 		sheets = torch.stack(sheets)
 		return sheets, successful
-
-	# loads points on gt surface point cloud in rings around reach touch site
-	def get_radius(self, obj_class, obj, grasp_number):
-		radii = []
-		radius_masks = []
-		point_rings_location = self.point_rings_location + f'{obj_class}/{obj}/radius_{grasp_number}_finger_num.npy'
-
-		# for each finger tip
-		for i in range(4):
-			radius_info = np.load(point_rings_location.replace('finger_num', str(i)), allow_pickle=True).item()
-			radius_masks.append(torch.LongTensor(radius_info['mask'])) # mask indicating which points corresponding to surface
-			radii.append(torch.FloatTensor(radius_info['plane'])) # full plane of projected points
-
-		radii = torch.stack(radii)
-		radius_masks = torch.stack(radius_masks)
-		return radii, radius_masks
-
-
-
 
 	def __getitem__(self, index):
 		if self.set_type == 'train':
@@ -179,9 +156,6 @@ class mesh_loader_vision(object):
 		# get touch information
 		data['sheets'], data['successful'] = self.get_touch_info(obj_class, obj, grasps)
 
-		if self.args.eval:
-			data['radius'], data['radius_masks'] = self.get_radius(obj_class, obj, grasp_number)
-
 		return data
 
 	def collate(self, batch):
@@ -193,10 +167,6 @@ class mesh_loader_vision(object):
 		data['img_occ'] = torch.cat([item['img_occ'].unsqueeze(0) for item in batch])
 		data['img_unocc'] = torch.cat([item['img_unocc'].unsqueeze(0) for item in batch])
 		data['successful'] = [item['successful'] for item in batch]
-
-		if self.args.eval:
-			data['radius'] = torch.cat([item['radius'].unsqueeze(0) for item in batch])
-			data['radius_masks'] = torch.cat([item['radius_masks'].unsqueeze(0) for item in batch])
 
 		return data
 
@@ -215,33 +185,36 @@ class mesh_loader_touch(object):
 
 		# initialization of data locations
 		self.args = args
-		self.surf_location = '../data/surface/'
+		self.surf_location = '../data/surfaces/'
 		self.img_location = '../data/images/'
-		self.touch_location = '../data/touch_info/'
-		self.sheet_location = '../data/sheets/'
+		self.touch_location = '../data/scene_info/'
+		self.sheet_location = '../data/remake_sheets/'
 		self.set_type = set_type
 		self.set_list = np.load('../data/split.npy', allow_pickle='TRUE').item()
 		self.empty =  torch.FloatTensor(np.load('../data/empty_gel.npy'))
+		self.produce_sheets = produce_sheets
+
+
+
 		names = [[f.split('/')[-1], f.split('/')[-2]] for f in glob((f'{self.img_location}/*/*'))]
 		self.names = []
-
+		import os
 		for n in tqdm(names):
 			if n[1] in classes:
-				if os.path.exists(self.surf_location + n[1] + '/' + n[0] + '.mat'):
+				if os.path.exists(self.surf_location + n[1]  + '/' + n[0] + '.npy'):
 					if os.path.exists(self.touch_location + n[1] + '/' + n[0]):
-						if produce_sheets or n[0] in self.set_list[n[1]][self.set_type]:
+						if self.produce_sheets or (n[0] + n[1]) in self.set_list[self.set_type]:
 							if produce_sheets:
 								for i in range(5):
 									for j in range(4):
 											self.names.append(n + [i, j])
 							else:
 								for i in range(5):
-									hand_info = np.load(f'{self.touch_location}/{n[1]}/{n[0]}/hand_{i}.npy',
+									hand_info = np.load(f'{self.touch_location}/{n[1]}/{n[0]}/{i}.npy',
 														allow_pickle=True).item()
 									for j in range(4):
-										if hand_info['touch'][j]:
+										if hand_info['touch_success'][j]:
 											self.names.append(n + [i, j])
-
 
 		print(f'The number of {set_type} set objects found : {len(self.names)}')
 
@@ -249,24 +222,21 @@ class mesh_loader_touch(object):
 		return len(self.names)
 
 	def standerdize_point_size(self, points):
-
 		if points.shape[0] == 0:
 			return torch.zeros((self.args.num_samples, 3))
-
 		np.random.shuffle(points)
 		points = torch.FloatTensor(points)
 		while points.shape[0] < self.args.num_samples :
 			points = torch.cat((points, points, points, points))
 		perm = torch.randperm(points.shape[0])
 		idx = perm[:self.args.num_samples ]
-
 		return points[idx]
 
 	def get_finger_transforms(self, hand_info, finger_num, args):
-		rot = hand_info['tip_rot'][finger_num]
+		rot = hand_info['cam_rot'][finger_num]
 		rot = R.from_euler('xyz', rot, degrees=False).as_matrix()
 		rot_q = R.from_matrix(rot).as_quat()
-		pos = hand_info['tip_pos'][finger_num]
+		pos = hand_info['cam_pos'][finger_num]
 		return torch.FloatTensor(rot_q), torch.FloatTensor(rot), torch.FloatTensor(pos)
 
 
@@ -279,12 +249,12 @@ class mesh_loader_touch(object):
 		data['class'] = obj_class
 
 		# hand infomation
-		hand_info = np.load(f'{self.touch_location}/{obj_class}/{obj}/hand_{num}.npy', allow_pickle=True).item()
+		hand_info = np.load(f'{self.touch_location}/{obj_class}/{obj}/{num}.npy', allow_pickle=True).item()
 		data['rot'], data['rot_M'], data['pos'] = self.get_finger_transforms(hand_info, finger_num, self.args)
-		data['good_touch'] = hand_info['touch']
+		data['good_touch'] = hand_info['touch_success']
 
 		# simulated touch information
-		scene_info = np.load(f'{self.touch_location}/{obj_class}/{obj}/images_{num}.npy', allow_pickle=True).item()
+		scene_info = np.load(f'{self.touch_location}/{obj_class}/{obj}/{num}.npy', allow_pickle=True).item()
 		data['depth'] = torch.clamp(torch.FloatTensor(scene_info['depth'][finger_num]).unsqueeze(0), 0, 1)
 		data['sim_touch']  = torch.FloatTensor(np.array(scene_info['gel'][finger_num]) / 255.).permute(2, 0, 1).contiguous().view(3, 100, 100)
 		data['empty'] = torch.FloatTensor(self.empty / 255.).permute(2, 0, 1).contiguous().view(3, 100, 100)
@@ -295,9 +265,6 @@ class mesh_loader_touch(object):
 
 		# where to save sheets
 		data['save_dir'] = f'{self.sheet_location}/{obj_class}/{obj}/sheets_{num}_{finger_num}.npy'
-		if not  os.path.exists(f'{self.sheet_location}/{obj_class}/{obj}/'):
-			os.makedirs(f'{self.sheet_location}/{obj_class}/{obj}/')
-
 		return data
 
 

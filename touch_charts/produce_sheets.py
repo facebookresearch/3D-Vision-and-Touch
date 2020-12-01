@@ -26,7 +26,7 @@ class Engine():
 		torch.manual_seed(args.seed)
 		torch.cuda.manual_seed(args.seed)
 
-		self.classes = ['knife', 'bottle','cellphone', 'rifle']
+		self.classes = ['0001', '0002']
 		self.args = args
 		self.verts, self.faces = utils.load_mesh_touch(f'../data/initial_sheet.obj')
 
@@ -37,9 +37,9 @@ class Engine():
 		self.encoder.eval()
 
 		train_data = data_loaders.mesh_loader_touch(self.classes, self.args, produce_sheets=True)
+		train_data.names = train_data.names[self.args.start:self.args.end]
 		train_loader = DataLoader(train_data, batch_size=1, shuffle=False,
 					num_workers=16, collate_fn=train_data.collate)
-
 
 		for k, batch in enumerate(tqdm(train_loader, smoothing=0)):
 			# initialize data
@@ -52,9 +52,12 @@ class Engine():
 				pred_depth, sampled_points = self.encoder(sim_touch, depth, ref_frame, empty = batch['empty'].cuda())
 
 			# optimize touch chart
-			for points, dir in zip(sampled_points,batch['save_dir'] ):
-				if not os.path.exists(dir[:-14]):
-					os.makedirs(dir[:-14])
+			for points, dir in zip(sampled_points, batch['save_dir']):
+				if os.path.exists(dir):
+					continue
+				directory = dir[:-len(dir.split('/')[-1])]
+				if not os.path.exists(directory):
+					os.makedirs(directory)
 
 				# if not a successful touch
 				if torch.abs(points).sum() == 0 :
@@ -109,9 +112,13 @@ if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--seed', type=int, default=0, help='Random seed.')
-	parser.add_argument('--save_directory', type=str, default='../pretrained/touch_charts/encoder_touch', help='Random seed.')
+	parser.add_argument('--start', type=int, default=0, help='Random seed.')
+	parser.add_argument('--end', type=int, default=10000000, help='Random seed.')
+	parser.add_argument('--save_directory', type=str, default='experiments/checkpoint/pretrained/encoder_touch',
+						help='Location of the model used to produce sheet')
 	parser.add_argument('--num_samples', type=int, default=4000, help='Number of points in the predicted point cloud.')
-	parser.add_argument('--model_location', type=str, default="../data/initial_sheet.obj")
+	parser.add_argument('--model_location', type=str, default="../data/initial_sheet.obj",
+						help='Location of inital mesh sheet whcih will be optimized')
 	parser.add_argument('--surf_co', type=float, default=9000.)
 	args = parser.parse_args()
 	trainer = Engine(args)

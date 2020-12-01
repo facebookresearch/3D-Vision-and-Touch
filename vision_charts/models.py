@@ -16,7 +16,7 @@ class Image_Encoder(nn.Module):
 	def __init__(self, args):
 		super(Image_Encoder, self).__init__()
 		layers = []
-		cur_size = 8
+		cur_size = 6
 		next_size = 16
 
 		for i in range(args.num_img_blocks):
@@ -28,7 +28,12 @@ class Image_Encoder(nn.Module):
 
 		self.args = args
 		self.layers = nn.ModuleList(layers)
-		self.matrix = torch.FloatTensor(np.load('../data/camera.npy')).cuda()
+		f = 221.7025
+		RT = np.array([[-0.0000, -1.0000, 0.0000, -0.0000],
+					   [-0.7071, 0.0000, -0.7071, 0.4243],
+					   [0.7071, 0.0000, -0.7071, 1.1314]])
+		K = np.array([[f, 0, 128.], [0, f, 128.], [0, 0, 1]])
+		self.matrix = torch.FloatTensor(K.dot(RT)).cuda()
 
 	# implemented from:
 	# https://github.com/EdwardSmith1884/GEOMetrics/blob/master/utils.py
@@ -44,6 +49,26 @@ class Image_Encoder(nn.Module):
 
 		full_features = None
 		batch_size = verts_pos.shape[0]
+
+		# check camera project covers the image
+		if debug:
+			dim = 256
+			xs = (torch.clamp(xs * dim, 0, dim - 1).data.cpu().numpy()).astype(np.uint8)
+			ys = (torch.clamp(ys * dim, 0, dim - 1).data.cpu().numpy()).astype(np.uint8)
+			for ex in range(blocks.shape[0]):
+				img = blocks[ex].permute(1, 2, 0).data.cpu().numpy()[:, :, :3]
+				for x, y in zip(xs[ex], ys[ex]):
+					img[x, y, 0] = 1
+					img[x, y, 1] = 0
+					img[x, y, 2] = 0
+
+				from PIL import Image
+				Image.fromarray((img * 255).astype(np.uint8)).save('results/temp.png')
+				print('saved')
+				input()
+
+
+
 		for block in blocks:
 			# scale projected vertex points to dimension of current feature map
 			dim = block.shape[-1]
@@ -136,7 +161,7 @@ class Encoder(nn.Module):
 		if args.use_occluded or args.use_unoccluded:
 			self.img_encoder = Image_Encoder(args).cuda()
 			with torch.no_grad():
-				input_size += self.img_encoder(torch.zeros(1, 4, 256, 256).cuda(), torch.zeros(1, 4, 256, 256).cuda(), torch.zeros(1, 1, 3).cuda()).shape[-1]
+				input_size += self.img_encoder(torch.zeros(1, 3, 256, 256).cuda(), torch.zeros(1, 3, 256, 256).cuda(), torch.zeros(1, 1, 3).cuda()).shape[-1]
 		if self.args.use_touch:
 			input_size+=1
 

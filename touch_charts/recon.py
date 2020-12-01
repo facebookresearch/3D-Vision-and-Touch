@@ -22,7 +22,6 @@ import data_loaders
 
 class Engine():
 	def __init__(self, args):
-
 		# set seeds
 		np.random.seed(args.seed)
 		torch.manual_seed(args.seed)
@@ -33,7 +32,7 @@ class Engine():
 		self.best_loss = 10000
 		self.args = args
 		self.last_improvement = 0
-		self.classes = ['bottle', 'knife', 'cellphone', 'rifle']
+		self.classes = ['0001', '0002']
 		self.checkpoint_dir = os.path.join('experiments/checkpoint/', args.exp_type, args.exp_id)
 		self.log_dir = f'experiments/results/{self.args.exp_type}/{self.args.exp_id}/'
 		if not os.path.exists(self.log_dir):
@@ -41,7 +40,6 @@ class Engine():
 
 
 	def __call__(self) -> float:
-
 		self.encoder = models.Encoder(self.args)
 		self.encoder.cuda()
 		params = list(self.encoder.parameters())
@@ -72,14 +70,13 @@ class Engine():
 		valid_loaders = []
 		set_type = 'test' if self.args.eval else 'valid'
 		for c in self.classes:
-			valid_data = data_loaders.instance_loader(c, self.args, set_type=set_type)
+			valid_data = data_loaders.mesh_loader_touch(c, self.args, set_type=set_type)
 			valid_loaders.append(
 				DataLoader(valid_data, batch_size=self.args.batch_size, shuffle=False, num_workers=16, collate_fn=valid_data.collate))
 		return train_loader, valid_loaders
 
 
 	def train(self, data, writer):
-
 		total_loss = 0
 		iterations = 0
 		self.encoder.train()
@@ -172,8 +169,6 @@ class Engine():
 			print(f'Saving Model with a {improvement} improvement in point loss')
 			self.save('')
 			self.last_improvement = 0
-
-
 		else:
 			self.last_improvement += 1
 			if self.last_improvement == self.args.patience:
@@ -197,9 +192,9 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--seed', type=int, default=0, help='Setting for the random seed.')
 	parser.add_argument('--epochs', type=int, default=300, help='Number of epochs to use.')
-	parser.add_argument('--lr', type=float, default=0.00003, help='Initial learning rate.')
+	parser.add_argument('--lr', type=float, default=0.001, help='Initial learning rate.')
 	parser.add_argument('--eval', action='store_true', default=False, help='Evaluate the trained model on the test set.')
-	parser.add_argument('--batch_size', type=int, default=32, help='Size of the batch.')
+	parser.add_argument('--batch_size', type=int, default=128, help='Size of the batch.')
 	parser.add_argument('--num_samples', type=int, default=4000, help='Number of points in the predicted point cloud.')
 	parser.add_argument('--patience', type=int, default=70, help='How many epochs without imporvement before training stops.')
 	parser.add_argument('--loss_coeff', type=float, default=9000., help='Coefficient for loss term.')

@@ -146,7 +146,6 @@ class Encoder(nn.Module):
 		# geometry of the object which is deforming the touch sensor's surface.
 		diff = torch.sqrt((((gel.permute(0, 2, 3, 1) - empty.permute(0, 2, 3, 1)).view(batch_size, -1, 3)) **2).sum(dim = -1))
 		useful_points = diff > 0.001
-
 		# project the depth values into 3D points
 		projected_depths = self.project_depth(pred_depth.squeeze(1), pos, rot_m).view(batch_size, -1, 3)
 

@@ -6,3 +6,4 @@ tqdm
 Pillow
 tensorflow
 tensorboard
+submitit

@@ -268,50 +268,55 @@ def calc_local_chamfer(samples, batch, losses):
 
 # sets up arugments for the pretrained models
 def pretrained_args(args):
-	if args.pretrained == 'touch':
-		args.num_gcn_layers = 15
+
+	if args.pretrained == 'empty':
+		args.use_occluded = False
+		args.use_unoccluded = False
+		args.use_touch = False
+
+	elif args.pretrained == 'touch':
+		args.num_gcn_layers = 25
 		args.hidden_gcn_layers = 250
 		args.use_occluded = False
 		args.use_unoccluded = False
 		args.use_touch = True
 
 	elif args.pretrained == 'touch_unoccluded':
-		args.num_img_blocks = 5
-		args.num_img_layers = 5
+		args.num_img_blocks = 4
+		args.num_img_layers = 3
 		args.size_img_ker = 5
-		args.num_gcn_layers = 25
+		args.num_gcn_layers = 15
 		args.hidden_gcn_layers = 200
 		args.use_occluded = False
 		args.use_unoccluded = True
 		args.use_touch = True
 
 	elif args.pretrained == 'touch_occluded':
-		args.num_img_blocks = 5
-		args.num_img_layers = 5
+		args.num_img_blocks = 4
+		args.num_img_layers = 3
 		args.size_img_ker = 5
 		args.num_gcn_layers = 20
-		args.hidden_gcn_layers = 250
+		args.hidden_gcn_layers = 200
 		args.use_occluded = True
 		args.use_unoccluded = False
 		args.use_touch = True
 
 	elif args.pretrained == 'unoccluded':
-		args.num_img_blocks = 4
+		args.num_img_blocks = 5
 		args.num_img_layers = 3
 		args.size_img_ker = 5
-		args.num_gcn_layers = 20
-		args.hidden_gcn_layers = 250
+		args.num_gcn_layers = 15
+		args.hidden_gcn_layers = 150
 		args.use_occluded = False
 		args.use_unoccluded = True
 		args.use_touch = False
 
-
 	elif args.pretrained == 'occluded':
-		args.num_img_blocks = 5
-		args.num_img_layers = 5
+		args.num_img_blocks = 4
+		args.num_img_layers = 3
 		args.size_img_ker = 5
-		args.num_gcn_layers = 20
-		args.hidden_gcn_layers = 200
+		args.num_gcn_layers = 25
+		args.hidden_gcn_layers = 250
 		args.use_occluded = True
 		args.use_unoccluded = False
 		args.use_touch = False
