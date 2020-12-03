@@ -9,7 +9,7 @@ Companion code for [E.J. Smith, et al.: 3D Shape Reconstruction from Vision and 
 
 This repository contains a code base and dataset for learning to fuse vision and touch signals from the 
 grasp interaction of a simulated robotic hand and 3D obejct for 3D shape reconstruction. The code comes with pre-defined train/valid/test splits
-over the dataset released, pretrained models, and training and evaluation scripts. This code base uses a subset of the [ABC Dataset](https://deep-geometry.github.io/abc-dataset/) instead of the dataset listed in the paper due to licensing issues. 
+over the dataset released, pretrained models, and training and evaluation scripts. This code base uses a subset of the [ABC Dataset](https://deep-geometry.github.io/abc-dataset/) (released under MIT License) instead of the dataset listed in the paper due to licensing issues. 
 We appologise for the discrepancy, however, no data could have been released otherwise. We have provided updated reconstruction accuracies for the new dataset below. 
 
 <p align="center">
@@ -46,6 +46,7 @@ To download the code call the following, keep in mind this will take some time t
 ```bash
 $ bash download_data.sh
 ```
+This is released under a MIT License. 
 
 ### Training
 
