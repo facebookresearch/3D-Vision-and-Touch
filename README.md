@@ -152,5 +152,4 @@ The following table highlights the reconstruction accuracies of these models on 
 
 
 ### License
-
-This codebase and dataset is released under MIT license, see [LICENSE](LICENSE.md) for details.
+See [LICENSE](LICENSE.md) for details.
