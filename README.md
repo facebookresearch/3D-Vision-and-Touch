@@ -4,7 +4,7 @@ All rights reserved.
 This source code is licensed under the license found in the
 LICENSE file in the root directory of this source tree.
 -->
-## Image-to-Set Prediction
+
 Companion code for [E.J. Smith, et al.: 3D Shape Reconstruction from Vision and Touch](https://arxiv.org/abs/2007.03778).
 
 This repository contains a code base and dataset for learning to fuse vision and touch signals from the 
