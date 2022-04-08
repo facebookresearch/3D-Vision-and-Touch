@@ -29,14 +29,10 @@ journal = {arXiv:1911.05063},
 
 ### Installation
 
-This code uses Python 3.6.9 , PyTorch 1.4.0. and cuda version 10.1
+This code uses PyTorch and PyTorch3D. I recommend you install them both following the install instruction found 
+[here](https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md).
 
-- Installing pytorch:
-```bash
-$ pip install torch==1.4.0
-```
-
-- Install dependencies
+- Install other dependencies:
 ```bash
 $ pip install -r requirements.txt
 ```

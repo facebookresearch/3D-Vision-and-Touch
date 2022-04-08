@@ -8,18 +8,13 @@ import torch
 import time
 import sys
 sys.path.insert(0, "../")
+from pytorch3d.loss import chamfer_distance as cuda_cd
 
 
-wait = True
-while wait:
-	try:
-		from third_party_code import ChamferDistance
-		chamfer_dist = ChamferDistance()
-		wait = False
-	except FileExistsError:
-		time.sleep(15)
-		print('trying again')
-		continue
+
+
+
+
 
 
 # loads the initial mesh and stores vertex, face, and adjacency matrix information
@@ -257,10 +252,9 @@ def calc_local_chamfer(samples, batch, losses):
 					continue
 
 				# compute the local loss between the selected points and the predicted surface
-				indices, _ = chamfer_dist(gt_masked.unsqueeze(0), pred.unsqueeze(0))
-				pred_counter = pred[indices.long()[0]]
-				loss = (torch.sum((pred_counter - gt_masked) ** 2, dim=1)).mean()
-				losses[i] += loss
+				loss, _ = cuda_cd(pred_points, gt_points, batch_reduction=None)
+
+				losses[i] += loss.mean()
 				if i == 0:
 					num_examples += 1.
 
@@ -353,22 +347,10 @@ def chamfer_distance(verts, faces, gt_points, num=1000):
 
 	# sample from faces and calculate pairs
 	pred_points = batch_sample(verts, faces, num=num)
-	id_p, id_g = chamfer_dist(gt_points, pred_points)
 
-	# calculate chamfer distance
-	pred_points = pred_points.view(-1, 3)
-	gt_points = gt_points.contiguous().view(-1, 3)
-	points_range = num * torch.arange(0, batch_size).cuda().unsqueeze(-1).expand(batch_size, num)
-	id_p = (id_p.long() + points_range).view(-1)
-	id_g = (id_g.long() + points_range).view(-1)
-	pred_counters = torch.index_select(pred_points, 0, id_p)
-	gt_counters = torch.index_select(gt_points, 0, id_g)
 
-	dist_1 = torch.mean(torch.sum((gt_counters - pred_points) ** 2, dim=1).view(batch_size, -1), dim=-1)
-	dist_2 = torch.mean(torch.sum((pred_counters - gt_points) ** 2, dim=1).view(batch_size, -1), dim=-1)
-	cd = (dist_1 + dist_2)
-
-	return cd
+	cd, _ = cuda_cd(pred_points, gt_points, batch_reduction=None)
+	return cd.mean()
 
 
 
@@ -399,23 +381,7 @@ def batch_calc_edge(verts, faces):
 # output:
 #	- cd: computed chamfer distance
 def point_loss(gt_points, pred_points):
-	batch_size = pred_points.shape[0]
-	num = pred_points.shape[-2]
-
-	id_p, id_g = chamfer_dist(gt_points, pred_points)
-	pred_points = pred_points.view(-1, 3)
-	gt_points = gt_points.contiguous().view(-1, 3)
-	points_range = num * torch.arange(0, batch_size).cuda().unsqueeze(-1).expand(batch_size, num)
-
-	id_p = (id_p.long() + points_range).view(-1)
-	id_g = (id_g.long() + points_range).view(-1)
-	pred_counters = torch.index_select(pred_points, 0, id_p)
-	gt_counters = torch.index_select(gt_points, 0, id_g)
-
-	dist_1 = torch.mean(torch.sum((gt_counters - pred_points) ** 2, dim=1))
-	dist_2 = torch.mean(torch.sum((pred_counters - gt_points) ** 2, dim=1))
-	cd = (dist_1 + dist_2)
-
-	return cd
+	cd, _ = cuda_cd(pred_points, gt_points, batch_reduction=None)
+	return cd.mean()
 
 
