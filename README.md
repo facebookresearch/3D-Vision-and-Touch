@@ -134,7 +134,7 @@ sheets, the sumbit.py file can be called. Premade sheets have also been provided
 
 To test using the pretrained models to reconstruct objects using different input modalities call: 
 ```bash
-$ cd vision 
+$ cd vision_charts 
 $ python recon.py --pretrained <model> --eval
 ```
 where ```<model>``` is one of either ['empty', 'touch', 'touch_unoccluded', 'touch_occluded', 'unoccluded', 'occluded'].

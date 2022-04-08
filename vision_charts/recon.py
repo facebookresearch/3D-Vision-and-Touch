@@ -126,7 +126,6 @@ class Engine():
 		# local losses at different distances from the touch sites
 
 		self.encoder.eval()
-		all_losses = []
 		for v, valid_loader in enumerate(data):
 			num_examples = 0
 			class_loss = 0
@@ -143,7 +142,6 @@ class Engine():
 
 				# losses
 				loss = utils.chamfer_distance(verts, self.adj_info['faces'], gt_points, num=self.num_samples)
-				all_losses += [l.item() for l in loss*self.args.loss_coeff]
 
 				loss = self.args.loss_coeff * loss.mean() * batch_size
 
